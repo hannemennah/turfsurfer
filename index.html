@@ -1,82 +1,244 @@
+<!DOCTYPE html>
 <html>
-  <head>
-    <title>TurfSurfer</title>
-    <style type="text/css">
-      html, body { height: 100%; margin: 0; padding: 0; }
-      #mapcontainer { height: 100%; }
-    </style>
-  </head>
-  
-<section id="wrapper">
-<div id="instructions">
-Click the allow button to let the browser find your location.
-</div>
+<head>
+<title>TurfSurfer</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<script type="text/javascript" src="js/jquery-2.1.4.min.js"></script>
+<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?key={YOUR_API_KEY_GOES_HERE}&sensor=false"></script>
+
+<script type="text/javascript">
 
 
-<script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
-    <article>
+$(document).ready(function() {
+    //var mapCenter = new google.maps.LatLng(47.6145, -122.3418); //Google map Coordinates
+    var map;
 
-    </article>
-<script>
-var clicking = false;
+    var styles = [{"featureType":"water","stylers":[{"saturation":43},{"lightness":-11},{"hue":"#0088ff"}]},{"featureType":"road","elementType":"geometry.fill","stylers":[{"hue":"#ff0000"},{"saturation":-100},{"lightness":99}]},{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#808080"},{"lightness":54}]},{"featureType":"landscape.man_made","elementType":"geometry.fill","stylers":[{"color":"#ece2d9"}]},{"featureType":"poi.park","elementType":"geometry.fill","stylers":[{"color":"#ccdca1"}]},{"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#767676"}]},{"featureType":"road","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},{"featureType":"poi","stylers":[{"visibility":"off"}]},{"featureType":"landscape.natural","elementType":"geometry.fill","stylers":[{"visibility":"on"},{"color":"#b8cb93"}]},{"featureType":"poi.park","stylers":[{"visibility":"on"}]},{"featureType":"poi.sports_complex","stylers":[{"visibility":"on"}]},{"featureType":"poi.medical","stylers":[{"visibility":"on"}]},{"featureType":"poi.business","stylers":[{"visibility":"simplified"}]}];
 
-function success(position) {
-  if(document.getElementById("mapcontainer") === null){
-    var mapcanvas = document.createElement('div');
-    mapcanvas.id = 'mapcontainer';
-    //mapcanvas.style.height = '400px';
-    mapcanvas.style.width = '800px';
 
-    document.querySelector('article').appendChild(mapcanvas);
+    map_initialize(); // initialize google map
+    
+    //############### Google Map Initialize ##############
+    function map_initialize(position)
+    {
+        if(position === undefined || position === null){
+          position = {coords: {latitude: 30.292013, longitude: -97.736671}};
+        }
+        var coords = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+        var googleMapOptions = 
+        { 
+            center: coords, // map center
+            zoom: 14, //zoom level, 0 = earth view to higher value
+            panControl: true, //enable pan Control
+            zoomControl: true, //enable zoom control
+            zoomControlOptions: {
+            style: google.maps.ZoomControlStyle.SMALL //zoom control size
+        },
+            scaleControl: true, // enable scale control
+            mapTypeId: google.maps.MapTypeId.ROADMAP // google map type
+        };
+    
+        map = new google.maps.Map(document.getElementById("map"), googleMapOptions);         
+        map.setOptions({styles: styles});
 
-  }
-  var coords = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-  
-  var options = {
-    zoom: 12,
-    center: coords,
-    mapTypeControl: false,
-    navigationControlOptions: {
-    	style: google.maps.NavigationControlStyle.SMALL
-    },
-    mapTypeId: google.maps.MapTypeId.ROADMAP
-  };
-  var map = new google.maps.Map(document.getElementById("mapcontainer"), options);
+        //Load Markers from the XML File, Check (postmap.php)
+        $.get("postmap.php", function (data) {
+            $(data).find("marker").each(function () {
+                 //Get user input values for the marker from the form
+                  var name      = $(this).attr('name');
+                  var address   = '<p>'+ $(this).attr('address') +'</p>';
+                  var type      = $(this).attr('type');
+                  var point     = new google.maps.LatLng(parseFloat($(this).attr('lat')),parseFloat($(this).attr('lng')));
 
-  var marker = new google.maps.Marker({
-      position: coords,
-      map: map,
-      title:"You are here!"
-  });
+                  //call create_marker() function for xml loaded maker
+                  create_marker(point, name, address, false, false, false, "http://localhost/pin.png");
+            });
+        }); 
+        
+        //drop a new marker on right click
+        google.maps.event.addListener(map, 'rightclick', function(event) {
+            //Edit form to be displayed with new marker
+    
+            var EditForm = '<p><div class="marker-edit">'+
+            '<form action="ajax-save.php" method="POST" name="SaveMarker" id="SaveMarker">'+
+            '<label for="pName"><span>Name :</span><input type="text" name="pName" class="save-name" placeholder="Location Name" maxlength="40"></label>'+
+            '<label for="pDesc"><span>Address :</span><textarea name="pDesc" class="save-desc" placeholder="Location Address" maxlength="150"></textarea></label>'+
+            '<label for="pType"><span>Type :</span> <select name="pType" class="save-type"><option value="restaurant">Restaurant</option><option value="bar">Fun</option>'+
+            '<option value="house">Home</option></select></label>'+
+            '</form>'+
+            '</div></p><button name="save-marker" class="save-marker">Save Marker Details</button>';
 
-  google.maps.event.addListener(map, 'click', function(event) {
-    if(clicking){
-        placeMarker(event.latLng);
+            //call create_marker() function
+            create_marker(event.latLng, 'Add Location', EditForm, true, true, true, "http://localhost/pin.png");
+        });    
+
+
+//############### Create Marker Function ##############
+function create_marker(MapPos, MapTitle, MapDesc,  InfoOpenDefault, DragAble, Removable, iconPath)
+{                 
+    //new marker
+    var marker = new google.maps.Marker({
+        position: MapPos,
+        map: map,
+        draggable:DragAble,
+        animation: google.maps.Animation.DROP,
+        title:MapTitle,
+        icon: iconPath
+    });
+    
+    //Content structure of info Window for the Markers
+    var contentString = $('<div class="marker-info-win">'+
+    '<div class="marker-inner-win"><span class="info-content">'+
+    '<h1 class="marker-heading">'+MapTitle+'</h1>'+
+    MapDesc+ 
+    '</span><button name="remove-marker" class="remove-marker" title="Remove Marker">Remove Marker</button>'+
+    '</div></div>');    
+
+    
+    //Create an infoWindow
+    var infowindow = new google.maps.InfoWindow();
+    //set the content of infoWindow
+    infowindow.setContent(contentString[0]);
+
+    //Find remove button in infoWindow
+    var removeBtn   = contentString.find('button.remove-marker')[0];
+
+   //Find save button in infoWindow
+    var saveBtn     = contentString.find('button.save-marker')[0];
+
+    //add click listner to remove marker button
+    google.maps.event.addDomListener(removeBtn, "click", function(event) {
+        //call remove_marker function to remove the marker from the map
+        remove_marker(marker);
+    });
+    
+    if(typeof saveBtn !== 'undefined') //continue only when save button is present
+    {
+        //add click listner to save marker button
+        google.maps.event.addDomListener(saveBtn, "click", function(event) {
+            var mReplace = contentString.find('span.info-content'); //html to be replaced after success
+            var mName = contentString.find('input.save-name')[0].value; //name input field value
+            var mDesc  = contentString.find('textarea.save-desc')[0].value; //description input field value
+            var mType = contentString.find('select.save-type')[0].value; //type of marker
+            
+            if(mName =='' || mDesc =='')
+            {
+                alert("Please enter Name and Description!");
+            }else{
+                //call save_marker function and save the marker details
+                save_marker(marker, mName, mDesc, mType, mReplace);
+            }
+        });
     }
-    clicking = !clicking
-  });
-
-  function placeMarker(location) {
-      var marker = new google.maps.Marker({
-        position: location, 
-        map: map
-      });
-  }
-
-}
-
-success({coords: {latitude: 30.292013, longitude: -97.736671}})
-
-if (navigator.geolocation) {
-  navigator.geolocation.getCurrentPosition(success);
-  document.getElementById("instructions").style.display = "none"; 
-} else {
-  error('Geo Location is not supported');
+    
+    //add click listner to save marker button        
+    google.maps.event.addListener(marker, 'click', function() {
+            infowindow.open(map,marker); // click on marker opens info window 
+    });
+      
+    if(InfoOpenDefault) //whether info window should be open by default
+    {
+      infowindow.open(map,marker);
+    }
 }
 
 
+
+
+
+
+
+//############### Remove Marker Function ##############
+function remove_marker(Marker)
+{
+    /* determine whether marker is draggable 
+    new markers are draggable and saved markers are fixed */
+    if(Marker.getDraggable()) 
+    {
+        Marker.setMap(null); //just remove new marker
+    }
+    else
+    {
+        //Remove saved marker from DB and map using jQuery Ajax
+        var mLatLang = Marker.getPosition().toUrlValue(); //get marker position
+        var myData = {del : 'true', latlang : mLatLang}; //post variables
+        $.ajax({
+          type: "POST",
+          url: "postmap.php",
+          data: myData,
+          success:function(data){
+                Marker.setMap(null); 
+                alert(data);
+            },
+            error:function (xhr, ajaxOptions, thrownError){
+                alert(thrownError); //throw any errors
+            }
+        });
+    }
+}
+
+
+
+
+
+
+//############### Save Marker Function ##############
+function save_marker(Marker, mName, mAddress, mType, replaceWin)
+{
+    //Save new marker using jQuery Ajax
+    var mLatLang = Marker.getPosition().toUrlValue(); //get marker position
+    var myData = {name : mName, address : mAddress, latlang : mLatLang, type : mType }; //post variables
+    console.log(replaceWin);        
+    $.ajax({
+      type: "POST",
+      url: "postmap.php",
+      data: myData,
+      success:function(data){
+            replaceWin.html(data); //replace info window with new html
+            Marker.setDraggable(false); //set marker to fixed
+            Marker.setIcon('http://localhost/pin.png'); //replace icon
+        },
+        error:function (xhr, ajaxOptions, thrownError){
+            alert(thrownError); //throw any errors
+        }
+    });
+}
+
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(map_initialize);
+      } else {
+        error('Geo Location is not supported');
+      }
+
+
+
+                         
+    }
+});
 </script>
-</section>
 
+
+<style type="text/css">
+    html, body {
+        background-image:url('bg.png');
+        margin: 0;
+        padding: 0;
+        height: 98%;
+        width: 100%;
+    }   
+    #map {width: 100%; height: 82%;margin-top:0px;margin-left:auto;margin-right:auto;}
+    h1.heading{color:white; text-align:center;font: 22px Georgia, "Times New Roman", Times, serif;}
+</style>
+
+</head>
+<body>
+    <div style="width:100%; height:100%;">
+    <h1 class="heading">TurfSurfer</h1>
+    <div align="center"><font color="white">Right Click to Add a New Location</font></div>
+    <!--<div id="mapDiv" style="width: 100%; height: 370px; position: relative; background-color: rgb(229, 227, 223); overflow: hidden;"></div>-->
+    <div id="map"></div>
+    </div>
+
+</body>
 </html>
-

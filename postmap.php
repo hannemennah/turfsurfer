@@ -1,13 +1,5 @@
 <?php
-// database settings 
-$db_username = 'DATABASE_USER';
-$db_password = 'DATABASE_PASSWORD';
-$db_name = 'DATABASE_NAME';
-$db_host = 'localhost';
-
-ini_set('display_startup_errors',1);
-ini_set('display_errors',1);
-error_reporting(-1);
+require 'config.php';
 
 //mysqli
 $mysqli = new mysqli($db_host, $db_username, $db_password, $db_name);

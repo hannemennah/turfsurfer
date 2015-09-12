@@ -25,6 +25,6 @@ Finally, edit index.html and replace the following string (on line 7) with [your
 
     {YOUR_API_KEY_HERE}
 
-(Note: the '{' and '}' characters should be replaced, too - they should not be present in the final URL you use.)
+*Note: the '{' and '}' characters should be replaced, too - they should not be present in the final URL you use.*
 
 Once the above steps are completed, you can load the index.html page in your browser and use TurfSurfer!

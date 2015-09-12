@@ -16,6 +16,10 @@ $(document).ready(function() {
     var styles = [{"featureType":"water","stylers":[{"saturation":43},{"lightness":-11},{"hue":"#0088ff"}]},{"featureType":"road","elementType":"geometry.fill","stylers":[{"hue":"#ff0000"},{"saturation":-100},{"lightness":99}]},{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#808080"},{"lightness":54}]},{"featureType":"landscape.man_made","elementType":"geometry.fill","stylers":[{"color":"#ece2d9"}]},{"featureType":"poi.park","elementType":"geometry.fill","stylers":[{"color":"#ccdca1"}]},{"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#767676"}]},{"featureType":"road","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},{"featureType":"poi","stylers":[{"visibility":"off"}]},{"featureType":"landscape.natural","elementType":"geometry.fill","stylers":[{"visibility":"on"},{"color":"#b8cb93"}]},{"featureType":"poi.park","stylers":[{"visibility":"on"}]},{"featureType":"poi.sports_complex","stylers":[{"visibility":"on"}]},{"featureType":"poi.medical","stylers":[{"visibility":"on"}]},{"featureType":"poi.business","stylers":[{"visibility":"simplified"}]}];
 
     var addMode = false;
+    var markers = [];
+    var infoWindow;
+    var locationSelect;
+
     map_initialize(); // initialize google map
 
 
@@ -66,6 +70,16 @@ $(document).ready(function() {
         map = new google.maps.Map(document.getElementById("map"), googleMapOptions);         
         map.setOptions({styles: styles});
 
+        infoWindow = new google.maps.InfoWindow();
+
+        locationSelect = document.getElementById("locationSelect");
+        locationSelect.onchange = function() {
+            var markerNum = locationSelect.options[locationSelect.selectedIndex].value;
+            if (markerNum != "none"){
+                google.maps.event.trigger(markers[markerNum], 'click');
+            }
+        };
+
         //Load Markers from the XML File, Check (postmap.php)
         $.get("postmap.php", function (data) {
             $(data).find("marker").each(function () {
@@ -101,6 +115,174 @@ $(document).ready(function() {
         });    
 
 
+
+
+
+
+
+
+
+
+
+
+
+//##TRYING IT OUT##//
+
+   window.searchLocations = function() {
+     var address = document.getElementById("addressInput").value;
+     var geocoder = new google.maps.Geocoder();
+     if(address === "home" || address === "" || address === null || address === undefined){
+        if(address === "home"){
+         var latlng = {lat:30.081643, lng: -97.829057};
+        } else {
+         var latlng = {lat: 30.292013, lng: -97.736671};
+        }
+         geocoder.geocode({'location': latlng}, function(results, status) {
+           if (status == google.maps.GeocoderStatus.OK) {
+            searchLocationsNear(results[0].geometry.location);
+           } else {
+             alert(address + ' something borked');
+           }
+         });
+     } else {
+         geocoder.geocode({address: address}, function(results, status) {
+           if (status == google.maps.GeocoderStatus.OK) {
+            searchLocationsNear(results[0].geometry.location);
+           } else {
+             alert(address + ' not found');
+           }
+         });
+     }
+   }
+
+   function clearLocations() {
+     infoWindow.close();
+     for (var i = 0; i < markers.length; i++) {
+       markers[i].setMap(null);
+     }
+     markers.length = 0;
+
+     locationSelect.innerHTML = "";
+     var option = document.createElement("option");
+     option.value = "none";
+     option.innerHTML = "See all results:";
+     locationSelect.appendChild(option);
+   }
+
+   function searchLocationsNear(center) {
+     clearLocations();
+
+     var radius = document.getElementById('radiusSelect').value;
+     var searchUrl = 'localresults.php?lat=' + center.lat() + '&lng=' + center.lng() + '&radius=' + radius;
+     downloadUrl(searchUrl, function(data) {
+       var xml = parseXml(data);
+       var markerNodes = xml.documentElement.getElementsByTagName("marker");
+       var bounds = new google.maps.LatLngBounds();
+       for (var i = 0; i < markerNodes.length; i++) {
+         var name = markerNodes[i].getAttribute("name");
+         var address = markerNodes[i].getAttribute("address");
+         var distance = parseFloat(markerNodes[i].getAttribute("distance"));
+         var latlng = new google.maps.LatLng(
+              parseFloat(markerNodes[i].getAttribute("lat")),
+              parseFloat(markerNodes[i].getAttribute("lng")));
+
+         createOption(name, distance, i);
+         createMarker(latlng, name, address);
+         bounds.extend(latlng);
+       }
+
+        // Don't zoom in too far on only one marker
+        if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
+           var extendPoint1 = new google.maps.LatLng(bounds.getNorthEast().lat() + 0.01, bounds.getNorthEast().lng() + 0.01);
+           var extendPoint2 = new google.maps.LatLng(bounds.getNorthEast().lat() - 0.01, bounds.getNorthEast().lng() - 0.01);
+           bounds.extend(extendPoint1);
+           bounds.extend(extendPoint2);
+        }
+
+       map.fitBounds(bounds);
+       locationSelect.style.visibility = "visible";
+       locationSelect.onchange = function() {
+         var markerNum = locationSelect.options[locationSelect.selectedIndex].value;
+         google.maps.event.trigger(markers[markerNum], 'click');
+       };
+      });
+    }
+
+    function createMarker(latlng, name, address) {
+      var html = "<b>" + name + "</b> <br>" + address;
+      var marker = new google.maps.Marker({
+        map: map,
+        position: latlng
+      });
+      marker.setIcon('http://localhost/pin2.png'); //replace icon
+      google.maps.event.addListener(marker, 'click', function() {
+        infoWindow.setContent(html);
+        infoWindow.open(map, marker);
+      });
+      markers.push(marker);
+    }
+
+    function createOption(name, distance, num) {
+      var option = document.createElement("option");
+      option.value = num;
+      option.innerHTML = name + " (" + distance.toFixed(1) + " miles)";
+      locationSelect.appendChild(option);
+    }
+
+    function downloadUrl(url, callback) {
+      var request = window.ActiveXObject ?
+          new ActiveXObject('Microsoft.XMLHTTP') :
+          new XMLHttpRequest;
+
+      request.onreadystatechange = function() {
+        if (request.readyState == 4) {
+          request.onreadystatechange = doNothing;
+          callback(request.responseText, request.status);
+        }
+      };
+
+      request.open('GET', url, true);
+      request.send(null);
+    }
+
+    function parseXml(str) {
+      if (window.ActiveXObject) {
+        var doc = new ActiveXObject('Microsoft.XMLDOM');
+        doc.loadXML(str);
+        return doc;
+      } else if (window.DOMParser) {
+        return (new DOMParser).parseFromString(str, 'text/xml');
+      }
+    }
+
+    function doNothing() {}
+
+
+//##FINISH TRY##//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //############### Create Marker Function ##############
 function create_marker(MapPos, MapTitle, MapDesc,  InfoOpenDefault, DragAble, Removable, iconPath)
 {                 
@@ -117,7 +299,7 @@ function create_marker(MapPos, MapTitle, MapDesc,  InfoOpenDefault, DragAble, Re
     //Content structure of info Window for the Markers
     var contentString = $('<div class="marker-info-win">'+
     '<div class="marker-inner-win"><span class="info-content">'+
-    '<h1 class="marker-heading"> Add Location </h1>'+
+    '<h1 class="marker-heading"> ' + MapTitle + ' </h1>'+
     MapDesc+ 
     '</span><button name="remove-marker" class="remove-marker" title="Remove Marker">Remove</button>'+
     '</div></div>');    
@@ -217,7 +399,6 @@ function save_marker(Marker, mName, mAddress, mType, replaceWin)
     //Save new marker using jQuery Ajax
     var mLatLang = Marker.getPosition().toUrlValue(); //get marker position
     var myData = {name : mName, address : mAddress, latlang : mLatLang, type : mType }; //post variables
-    console.log(replaceWin);        
     $.ajax({
       type: "POST",
       url: "postmap.php",
@@ -245,6 +426,10 @@ function save_marker(Marker, mName, mAddress, mType, replaceWin)
                          
     }
 });
+
+
+
+
 </script>
 
 
@@ -268,7 +453,7 @@ function save_marker(Marker, mName, mAddress, mType, replaceWin)
             height: 25px;  
             width: 25px;
     }
-    #map {width: 100%; height: 82%;margin-top:0px;margin-left:auto;margin-right:auto;}
+    #map {width: 100%; height: 78%;margin-top:0px;margin-left:auto;margin-right:auto;}
     h1.heading{color:white; text-align:center;font: 27px Georgia, "Times New Roman", Times, serif; font-weight: bold;}
 </style>
 
@@ -277,8 +462,29 @@ function save_marker(Marker, mName, mAddress, mType, replaceWin)
     <div style="width:100%; height:100%;">
     <h1 class="heading">TurfSurfer</h1>
     <div id="map"></div>
-    <div align="center" style="float:right;"><font color="white">Add New Location</font><br>
-       <button id="add-button" title="Add Entry to Map+Database" onclick="toggleAddMode();"><img src="addbutton.png"></div>
+
+<div><select id="locationSelect" style="width:100%;visibility:hidden"></select></div>
+
+    <div align="center" style="float:right;"><font color="white">Add New Location</font>
+        <br>       
+        <button  id="add-button" title="Add Entry to Map+Database" onclick="toggleAddMode();"><img src="addbutton.png">
+    </div>
+    <div>
+     <input type="text" id="addressInput" size="20">
+    <select id="radiusSelect">
+      <option value="5" selected="">5mi</option>
+      <option value="10" selected="">10mi</option>
+      <option value="25">25mi</option>
+      <option value="50" selected="">50mi</option>
+      <option value="100">100mi</option>
+      <option value="1000">1000mi</option>
+    </select>
+    <input type="button" onclick="searchLocations()" value="Search">
+    <br> <font color="white">Search Near Address</font>
+    </div>
+
+    <!--<div align="center" style="float:right;"><font color="white">Add New Location</font><br>-->
+
     </div>
 
 </body>

@@ -4,7 +4,7 @@
 <title>TurfSurfer</title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <script type="text/javascript" src="js/jquery-2.1.4.min.js"></script>
-<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?key={YOUR_API_KEY_GOES_HERE}&sensor=false"></script>
+<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?key={YOUR_API_KEY_HERE}&sensor=false"></script>
 
 <script type="text/javascript">
 
@@ -15,8 +15,33 @@ $(document).ready(function() {
 
     var styles = [{"featureType":"water","stylers":[{"saturation":43},{"lightness":-11},{"hue":"#0088ff"}]},{"featureType":"road","elementType":"geometry.fill","stylers":[{"hue":"#ff0000"},{"saturation":-100},{"lightness":99}]},{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#808080"},{"lightness":54}]},{"featureType":"landscape.man_made","elementType":"geometry.fill","stylers":[{"color":"#ece2d9"}]},{"featureType":"poi.park","elementType":"geometry.fill","stylers":[{"color":"#ccdca1"}]},{"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#767676"}]},{"featureType":"road","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},{"featureType":"poi","stylers":[{"visibility":"off"}]},{"featureType":"landscape.natural","elementType":"geometry.fill","stylers":[{"visibility":"on"},{"color":"#b8cb93"}]},{"featureType":"poi.park","stylers":[{"visibility":"on"}]},{"featureType":"poi.sports_complex","stylers":[{"visibility":"on"}]},{"featureType":"poi.medical","stylers":[{"visibility":"on"}]},{"featureType":"poi.business","stylers":[{"visibility":"simplified"}]}];
 
-
+    var addMode = false;
     map_initialize(); // initialize google map
+
+
+    //## Enable AddMode On Button Click ##//
+    window.toggleAddMode = function(){
+        if(addMode) turnOffAddMode();
+        else {
+            map.setOptions({panControl: false, //disable pan Control
+                            zoomControl: false, //disable zoom control
+                            scrollwheel: false, //disable scrollWheel zoom
+                            cursor:'crosshair', //bullseye!
+                            draggableCursor:'crosshair', //back to draggable
+                            draggable: false}); //disable drag
+            addMode = true;
+        }
+    }
+
+    function turnOffAddMode(){
+            map.setOptions({panControl: true, //enable pan Control
+                            zoomControl: true, //enable zoom control
+                            scrollwheel: true, //enable scrollWheel zoom
+                            cursor:'auto', //bullseye!
+                            draggableCursor:'auto', //back to draggable
+                            draggable: true}); //enable drag
+            addMode = false;
+    }
     
     //############### Google Map Initialize ##############
     function map_initialize(position)
@@ -55,21 +80,24 @@ $(document).ready(function() {
             });
         }); 
         
-        //drop a new marker on right click
-        google.maps.event.addListener(map, 'rightclick', function(event) {
+        //drop a new marker when we're in "addMode" and we click
+        google.maps.event.addListener(map, 'click', function(event) {
             //Edit form to be displayed with new marker
     
-            var EditForm = '<p><div class="marker-edit">'+
-            '<form action="ajax-save.php" method="POST" name="SaveMarker" id="SaveMarker">'+
-            '<label for="pName"><span>Name :</span><input type="text" name="pName" class="save-name" placeholder="Location Name" maxlength="40"></label>'+
-            '<label for="pDesc"><span>Address :</span><textarea name="pDesc" class="save-desc" placeholder="Location Address" maxlength="150"></textarea></label>'+
-            '<label for="pType"><span>Type :</span> <select name="pType" class="save-type"><option value="restaurant">Restaurant</option><option value="bar">Fun</option>'+
-            '<option value="house">Home</option></select></label>'+
-            '</form>'+
-            '</div></p><button name="save-marker" class="save-marker">Save Marker Details</button>';
+            if(addMode){
+                var EditForm = '<p><div class="marker-edit">'+
+                '<form action="ajax-save.php" method="POST" name="SaveMarker" id="SaveMarker">'+
+                '<label for="pName"><span>Name :</span><input type="text" name="pName" class="save-name" placeholder="Location Name" maxlength="40"></label>'+
+                '<label for="pDesc"><span>Address :</span><textarea name="pDesc" class="save-desc" placeholder="Location Address" maxlength="150"></textarea></label>'+
+                '<label for="pType"><span>Type :</span> <select name="pType" class="save-type"><option value="restaurant">Restaurant</option><option value="bar">Fun</option>'+
+                '<option value="house">Home</option></select></label>'+
+                '</form>'+
+                '</div></p><button name="save-marker" class="save-marker">Save Marker Details</button>';
 
-            //call create_marker() function
-            create_marker(event.latLng, 'Add Location', EditForm, true, true, true, "http://localhost/pin.png");
+                //call create_marker() function
+                create_marker(event.latLng, 'New Location', EditForm, true, true, true, "http://localhost/pin.png");
+                turnOffAddMode();
+            }
         });    
 
 
@@ -89,9 +117,9 @@ function create_marker(MapPos, MapTitle, MapDesc,  InfoOpenDefault, DragAble, Re
     //Content structure of info Window for the Markers
     var contentString = $('<div class="marker-info-win">'+
     '<div class="marker-inner-win"><span class="info-content">'+
-    '<h1 class="marker-heading">'+MapTitle+'</h1>'+
+    '<h1 class="marker-heading"> Add Location </h1>'+
     MapDesc+ 
-    '</span><button name="remove-marker" class="remove-marker" title="Remove Marker">Remove Marker</button>'+
+    '</span><button name="remove-marker" class="remove-marker" title="Remove Marker">Remove</button>'+
     '</div></div>');    
 
     
@@ -127,6 +155,7 @@ function create_marker(MapPos, MapTitle, MapDesc,  InfoOpenDefault, DragAble, Re
             }else{
                 //call save_marker function and save the marker details
                 save_marker(marker, mName, mDesc, mType, mReplace);
+                marker.title = mName;
             }
         });
     }
@@ -226,18 +255,30 @@ function save_marker(Marker, mName, mAddress, mType, replaceWin)
         padding: 0;
         height: 98%;
         width: 100%;
-    }   
+        font: 20px Georgia, "Times New Roman", Times, serif;
+    }
+    #add-button {
+       background-color: Transparent;
+       border: none;
+       outline:none;
+
+    }
+    #add-button img, {
+            display: block;
+            height: 25px;  
+            width: 25px;
+    }
     #map {width: 100%; height: 82%;margin-top:0px;margin-left:auto;margin-right:auto;}
-    h1.heading{color:white; text-align:center;font: 22px Georgia, "Times New Roman", Times, serif;}
+    h1.heading{color:white; text-align:center;font: 27px Georgia, "Times New Roman", Times, serif; font-weight: bold;}
 </style>
 
 </head>
 <body>
     <div style="width:100%; height:100%;">
     <h1 class="heading">TurfSurfer</h1>
-    <div align="center"><font color="white">Right Click to Add a New Location</font></div>
-    <!--<div id="mapDiv" style="width: 100%; height: 370px; position: relative; background-color: rgb(229, 227, 223); overflow: hidden;"></div>-->
     <div id="map"></div>
+    <div align="center" style="float:right;"><font color="white">Add New Location</font><br>
+       <button id="add-button" title="Add Entry to Map+Database" onclick="toggleAddMode();"><img src="addbutton.png"></div>
     </div>
 
 </body>
